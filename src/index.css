@@ -1,0 +1,287 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-arcade-black text-arcade-white font-pixel m-0 p-0 min-h-screen box-border overflow-hidden;
+  }
+}
+
+@layer components {
+  .arcade-grid {
+    background: 
+      linear-gradient(90deg, transparent 39px, rgba(0, 255, 255, 0.3) 40px),
+      linear-gradient(180deg, transparent 39px, rgba(255, 0, 255, 0.3) 40px);
+    background-size: 40px 40px;
+    mix-blend-mode: screen;
+  }
+
+  .arcade-scanline {
+    position: relative;
+  }
+
+  .arcade-scanline::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      transparent 50%,
+      rgba(0, 0, 0, 0.4) 50%,
+      rgba(0, 0, 0, 0.4)
+    );
+    background-size: 100% 4px;
+    z-index: 50;
+    pointer-events: none;
+  }
+
+  .arcade-scanline::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(
+      circle at center,
+      transparent 50%,
+      rgba(0, 0, 0, 0.5) 150%
+    );
+    mix-blend-mode: multiply;
+    z-index: 40;
+    pointer-events: none;
+  }
+
+  .ghost-consciousness {
+    background: radial-gradient(circle at center, 
+      rgba(255, 0, 255, 0.2) 0%, 
+      rgba(0, 0, 0, 0.95) 70%
+    );
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ghost-consciousness::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.1),
+      rgba(0, 0, 0, 0.1) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .dialog-box {
+    @apply bg-arcade-black border-2 border-arcade-blue p-4 rounded relative;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5), 
+                inset 0 0 5px rgba(0, 255, 255, 0.5);
+  }
+
+  .neon-button {
+    @apply px-6 py-3 border-2 border-arcade-white bg-transparent text-arcade-white 
+           font-pixel relative inline-block transition-all duration-300 
+           hover:border-arcade-magenta focus:outline-none;
+  }
+
+  .neon-button:hover {
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.7), 
+                0 0 20px rgba(255, 0, 255, 0.4), 
+                0 0 30px rgba(255, 0, 255, 0.2);
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+  }
+
+  .ghost-sprite {
+    @apply w-16 h-16 relative;
+    filter: drop-shadow(0 0 8px rgba(255, 0, 255, 0.6));
+  }
+
+  .ghost-sprite img {
+    image-rendering: pixelated;
+  }
+}
+
+@layer utilities {
+  @keyframes zoom-in-soft {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .animate-zoom-in-soft { animation: zoom-in-soft 0.5s ease-out forwards; }
+
+  @keyframes pulse-glow {
+    0%, 100% { text-shadow: 0 0 5px theme('colors.arcade.magenta'), 0 0 10px theme('colors.arcade.magenta'); opacity: 0.8; }
+    50% { text-shadow: 0 0 10px theme('colors.arcade.magenta'), 0 0 20px theme('colors.arcade.magenta'), 0 0 30px theme('colors.arcade.magenta'); opacity: 1; }
+  }
+  .animate-pulse-glow { animation: pulse-glow 2s infinite ease-in-out; }
+
+  @keyframes float-gentle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+  .animate-float-gentle { animation: float-gentle 3s infinite ease-in-out; }
+
+  @keyframes rainbow-border-kf {
+    0%, 100% { border-color: #ff0000; box-shadow: 0 0 5px #ff0000, 0 0 10px #ff0000; }
+    16% { border-color: #ff7f00; box-shadow: 0 0 5px #ff7f00, 0 0 10px #ff7f00; }
+    32% { border-color: #ffff00; box-shadow: 0 0 5px #ffff00, 0 0 10px #ffff00; }
+    48% { border-color: #00ff00; box-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00; }
+    64% { border-color: #0000ff; box-shadow: 0 0 5px #0000ff, 0 0 10px #0000ff; }
+    80% { border-color: #4b0082; box-shadow: 0 0 5px #4b0082, 0 0 10px #4b0082; }
+    94% { border-color: #8f00ff; box-shadow: 0 0 5px #8f00ff, 0 0 10px #8f00ff; }
+  }
+  .animate-rainbow-border {
+    animation: rainbow-border-kf 4s infinite linear;
+    border-width: 2px; /* Garante que a borda seja visível */
+  }
+  .dialog-box-achievement {
+    box-shadow: 0 0 15px rgba(0, 180, 255, 0.7), 
+                inset 0 0 10px rgba(0, 180, 255, 0.6);
+  }
+}
+
+/* Sphere Styles for DimensionalRiftGatewayScene */
+.sphere-base {
+  width: 10rem; /* 160px */
+  height: 10rem; /* 160px */
+  border-radius: 50%;
+  cursor: pointer;
+  /* position: absolute; /* Applied by Tailwind classes in the component */
+  /* z-index: 10; /* Applied by Tailwind classes in the component */
+  transition: transform 0.3s ease-in-out, box-shadow 0.5s ease-in-out;
+}
+
+@media (min-width: 768px) { /* md breakpoint */
+  .sphere-base {
+    width: 13rem; /* 208px */
+    height: 13rem; /* 208px */
+  }
+}
+
+/* For CSS Houdini @property, if supported and desired for smooth gradient animation */
+@property --gradient-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.sphere-vibrating {
+  background-image: conic-gradient(
+    from var(--gradient-angle, 0deg),
+    #4f0a78, /* Roxo mais escuro */
+    #c50eb3, /* Rosa vibrante */
+    #0ac5c5, /* Ciano vibrante */
+    #c50eb3, /* Rosa vibrante */
+    #4f0a78  /* Roxo mais escuro */
+  );
+  animation: 
+    sphere-rotate-gradient 10s linear infinite, 
+    sphere-aura-pulse 3s infinite ease-in-out,
+    sphere-shake-effect 1.5s infinite cubic-bezier(.36,.07,.19,.97) both;
+}
+
+.sphere-static {
+  /* Static gradient - pick one state of the animated one */
+  background-image: conic-gradient(
+    from 0deg,
+    #4f0a78, #c50eb3, #0ac5c5, #c50eb3, #4f0a78
+  );
+  box-shadow: 0 0 10px 2px rgba(200, 200, 255, 0.4); /* Aura estática mais sutil */
+}
+
+@keyframes sphere-rotate-gradient {
+  0% { --gradient-angle: 0deg; }
+  100% { --gradient-angle: 360deg; }
+}
+
+@keyframes sphere-aura-pulse {
+  0%, 100% {
+    box-shadow: 0 0 40px 10px rgba(197, 14, 179, 0.35), /* Aura Rosa/Roxa - blur aumentado, spread aumentado levemente, opacidade levemente reduzida */
+                0 0 55px 20px rgba(10, 197, 197, 0.25); /* Aura Ciano - blur aumentado, spread aumentado levemente, opacidade levemente reduzida */
+  }
+  50% {
+    box-shadow: 0 0 50px 15px rgba(220, 100, 255, 0.45), /* Aura mais intensa - blur aumentado, spread aumentado levemente, opacidade levemente reduzida */
+                0 0 70px 28px rgba(80, 220, 220, 0.35);
+  }
+}
+
+@keyframes sphere-shake-effect {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  10% { transform: translate3d(-1px, -1.5px, 0) scale(1.01); }
+  20% { transform: translate3d(1.5px, 1px, 0) scale(0.99); }
+  30% { transform: translate3d(-1.5px, 1.5px, 0) scale(1.005); }
+  40% { transform: translate3d(1px, -1px, 0) scale(0.995); }
+  50% { transform: translate3d(-0.5px, 0.5px, 0) scale(1.002); }
+  60% { transform: translate3d(0.5px, 1.5px, 0) scale(0.998); }
+  70% { transform: translate3d(-1.5px, -0.5px, 0) scale(1.003); }
+  80% { transform: translate3d(1.5px, -1.5px, 0) scale(0.997); }
+  90% { transform: translate3d(-1px, 0.5px, 0) scale(1.001); }
+}
+
+/* Zoom-out on click effect */
+.sphere-clicked-zoom {
+  transform: scale(0.95) !important; /* Use !important to ensure override if needed */
+}
