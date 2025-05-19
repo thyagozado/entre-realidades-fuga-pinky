@@ -1,10 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import useAudioManager from '../hooks/useAudioManager';
 
 interface FinalCreditsSceneProps {
   onRestart: () => void;
 }
 
 const FinalCreditsScene: React.FC<FinalCreditsSceneProps> = ({ onRestart }) => {
+  const { playSound, stopSound } = useAudioManager();
+
+  useEffect(() => {
+    playSound({
+      filePath: '/assets/sounds/final_credits_music.mp3',
+      loop: true,
+      fadeInDuration: 2.0,
+      volume: 0.8
+    });
+    return () => {
+      stopSound('/assets/sounds/final_credits_music.mp3', 2.0);
+    };
+  }, [playSound, stopSound]);
+
   return (
     <div className="w-screen h-screen bg-black flex flex-col items-center justify-center text-white font-pixel p-8">
       {/* Título do Jogo - Tentativa de replicar o estilo da referência */}
@@ -26,9 +41,13 @@ const FinalCreditsScene: React.FC<FinalCreditsSceneProps> = ({ onRestart }) => {
       </button>
 
       {/* Criadores */}
-      <div className="text-center mb-8">
-        <p className="text-lg md:text-xl text-gray-300">Criadores</p>
-        <p className="text-xl md:text-2xl text-gray-100 mt-1">Jadson Rodrigues & Thyago Nogueira</p>
+      <div className="flex flex-col items-center mt-8">
+        <span className="text-lg font-pixel text-white">Criadores</span>
+        <span className="text-2xl font-pixel text-white mt-2">Jadson Rodrigues & Thyago Nogueira</span>
+        <div className="flex flex-row items-center justify-center mt-2" style={{ gap: '25px' }}>
+          <span className="text-base font-mono text-gray-300">@jjjjad.raw</span>
+          <span className="text-base font-mono text-gray-300">@thyago.ty</span>
+        </div>
       </div>
 
       {/* Rodapé */}

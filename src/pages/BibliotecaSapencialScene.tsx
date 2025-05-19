@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReturnToMapButton from '../components/ui/ReturnToMapButton';
 import PixelArtBook from '../components/ui/PixelArtBook';
 import BookReader from '../components/ui/BookReader'; // Importar o BookReader
 import AchievementNotification from '../components/ui/AchievementNotification'; // Importar AchievementNotification
+import useAudioManager from '../hooks/useAudioManager'; // Adicionado
 
 interface BookData {
   id: string;
@@ -78,6 +79,41 @@ const BibliotecaSapencialScene: React.FC<BibliotecaSapencialSceneProps> = ({ onR
   const [openedBookData, setOpenedBookData] = useState<BookData | null>(null);
   const [isReaderOpen, setIsReaderOpen] = useState(false);
   const [showSentinelaAchievement, setShowSentinelaAchievement] = useState(false); // Estado para a conquista
+  const booksContainerRef = useRef<HTMLDivElement>(null); // Ref para o contêiner dos livros
+  const { playSound, stopSound } = useAudioManager(); // Adicionado
+
+  // Constantes para cálculo de layout dos livros
+  const BOOK_WIDTH_APPROX = 100; // Largura aproximada de um livro para cálculo do min-width
+  const INITIAL_LEFT_OFFSET = 50; // Diminuído para teste
+  const HORIZONTAL_SPACING = 150; // Diminuído para teste
+  const TOP_POSITION_PERCENT = '50%'; // Mudado para porcentagem
+
+  // Calcula a largura mínima necessária para o contêiner de scroll dos livros
+  const minBooksContainerWidth = 
+    INITIAL_LEFT_OFFSET + 
+    (booksOnShelves.length > 0 ? (booksOnShelves.length - 1) * HORIZONTAL_SPACING + BOOK_WIDTH_APPROX : 0) + 
+    INITIAL_LEFT_OFFSET; // Adiciona um padding no final também
+
+  useEffect(() => {
+    if (booksContainerRef.current) {
+      // console.log('Books Container Mounted');
+      // console.log('clientWidth:', booksContainerRef.current.clientWidth);
+      // console.log('scrollWidth:', booksContainerRef.current.scrollWidth);
+      // console.log('Computed minWidth style:', booksContainerRef.current.style.minWidth);
+    }
+  }, [minBooksContainerWidth]); // Adicionado minBooksContainerWidth como dependência para logar quando recalcular
+
+  useEffect(() => {
+    playSound({
+      filePath: '/assets/sounds/biblioteca_music.mp3',
+      loop: true,
+      fadeInDuration: 1.5,
+      volume: 0.7
+    });
+    return () => {
+      stopSound('/assets/sounds/biblioteca_music.mp3', 1.5);
+    };
+  }, [playSound, stopSound]);
 
   const handleBookClick = (bookData: BookData) => {
     setOpenedBookData(bookData);
@@ -87,9 +123,12 @@ const BibliotecaSapencialScene: React.FC<BibliotecaSapencialSceneProps> = ({ onR
   const handleCloseReader = () => {
     setIsReaderOpen(false);
     if (openedBookData?.id === 'livro2') {
-      // Idealmente, verificar se a conquista já foi ganha para não mostrar repetidamente,
-      // mas para este escopo, mostraremos ao fechar o livro 2.
       setShowSentinelaAchievement(true);
+      playSound({
+        filePath: '/assets/sounds/level_up_biblioteca_sfx.mp3',
+        loop: false,
+        volume: 1.0
+      });
     }
     // Não é estritamente necessário limpar openedBookData aqui,
     // pois o useEffect no BookReader vai resetar a página ao reabrir.
@@ -100,49 +139,90 @@ const BibliotecaSapencialScene: React.FC<BibliotecaSapencialSceneProps> = ({ onR
   };
 
   return (
-    <div 
-      className="w-screen h-screen bg-cover bg-center bg-no-repeat relative font-pixel"
-      style={{ backgroundImage: "url('/assets/images/cena_biblioteca.png')" }}
-    >
-      <ReturnToMapButton onClick={onReturnToMap} />
-
-      {booksOnShelves.map((book, index) => {
-        const topPosition = '250px';
-        const initialLeftOffset = 100; // Em pixels
-        const horizontalSpacing = 175; // Em pixels
-        const leftPosition = `${initialLeftOffset + index * horizontalSpacing}px`;
-
-        return (
-          <PixelArtBook 
-            key={book.id}
-            title={book.title}
-            onClick={() => handleBookClick(book)}
-            style={{ top: topPosition, left: leftPosition }}
-            color={book.color}
+    <>
+      {/* Estilos para a barra de scroll devem estar dentro do JSX retornado */}
+      <style jsx global>{`
+        .کتاب-scroller-container::-webkit-scrollbar {
+          height: 12px; /* Aumentado para visibilidade */
+          background-color: rgba(0,0,0,0.3); 
+        }
+        .کتاب-scroller-container::-webkit-scrollbar-thumb {
+          background-color: rgba(204, 153, 102, 0.8); /* Mais opaco */
+          border-radius: 6px;
+          border: 2px solid rgba(0,0,0,0.4);
+        }
+        .کتاب-scroller-container::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(184, 133, 82, 1);
+        }
+        .کتاب-scroller-container {
+          scrollbar-width: auto; /* "auto" ou "thin" - mudado para auto para mais visibilidade */
+          scrollbar-color: rgba(204, 153, 102, 0.8) rgba(0,0,0,0.3);
+        }
+      `}</style>
+      <div 
+        className="min-h-screen w-screen bg-cover bg-center bg-no-repeat relative font-pixel overflow-hidden"
+        style={{ backgroundImage: "url('/assets/images/cena_biblioteca.png')" }}
+      >
+        <div className="relative z-10 flex flex-col items-center justify-center w-full h-full">
+          <ReturnToMapButton 
+            onClick={onReturnToMap} 
+            className="absolute top-4 left-4 z-50"
           />
-        );
-      })}
 
-      {openedBookData && (
-        <BookReader 
-          isOpen={isReaderOpen}
-          onClose={handleCloseReader}
-          title={openedBookData.title}
-          pages={openedBookData.pages}
-        />
-      )}
+          <div className="relative w-full h-full max-w-4xl mx-auto flex items-center justify-center"> {/* Adicionado justify-center para teste */}
+            {/* Contêiner Externo que limita a largura no desktop e centraliza */}
+            {/* Contêiner Interno para os livros, com scroll horizontal em mobile */}
+            <div 
+              ref={booksContainerRef}
+              className="w-full md:overflow-x-visible overflow-x-auto کتاب-scroller-container relative" // Restaurado md:overflow-x-visible e overflow-x-auto. Removidas classes de diagnóstico. Mantido w-full e relative.
+              style={{
+                minWidth: `${minBooksContainerWidth}px`, 
+                height: '450px', // Aumentada altura
+                // position: 'relative' já está na classe
+              }}
+            >
+              {booksOnShelves.map((book, index) => {
+                const leftPosition = `${INITIAL_LEFT_OFFSET + index * HORIZONTAL_SPACING}px`;
+                // Os livros agora são posicionados absolutamente dentro deste contêiner de scroll
+                return (
+                  <PixelArtBook 
+                    key={book.id}
+                    title={book.title}
+                    onClick={() => handleBookClick(book)}
+                    style={{ 
+                      position: 'absolute', 
+                      top: TOP_POSITION_PERCENT, 
+                      left: leftPosition,
+                      transform: 'translateY(-50%)', // Adicionado para centralizar verticalmente
+                    }}
+                    color={book.color}
+                  />
+                );
+              })}
+            </div>
 
-      <AchievementNotification 
-        isOpen={showSentinelaAchievement}
-        onClose={handleCloseAchievement}
-        achievementTitle="Sentinela do saber"
-        description="Você acumulou conhecimento suficiente para pensar sobre si mesmo e o mundo."
-        progressCurrent={2}
-        progressMax={4}
-        pinkySpriteUrl="/assets/images/pinky_sprite_frente_16bit.png"
-      />
-      
-    </div>
+            {openedBookData && (
+              <BookReader 
+                isOpen={isReaderOpen}
+                onClose={handleCloseReader}
+                title={openedBookData.title}
+                pages={openedBookData.pages}
+              />
+            )}
+          </div>
+          
+          <AchievementNotification 
+            isOpen={showSentinelaAchievement}
+            onClose={handleCloseAchievement}
+            achievementTitle="Sentinela do saber"
+            description="Você acumulou conhecimento suficiente para pensar sobre si mesmo e o mundo."
+            progressCurrent={2}
+            progressMax={4}
+            pinkySpriteUrl="/assets/images/pinky_sprite_frente_16bit.png"
+          />
+        </div>
+      </div>
+    </>
   );
 };
 

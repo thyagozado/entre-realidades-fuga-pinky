@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import useAudioManager from '../hooks/useAudioManager';
 
 interface PortalTransitionSceneProps {
   onComplete: () => void;
@@ -67,8 +68,15 @@ const PortalTransitionScene: React.FC<PortalTransitionSceneProps> = ({ onComplet
   const activeGlitchesRef = useRef<ActiveGlitch[]>([]); // Store active glitches
   const pinkyImageRef = useRef<HTMLImageElement | null>(null);
   const pinkyLoadedRef = useRef(false);
+  const { playSound, stopSound } = useAudioManager();
 
   useEffect(() => {
+    playSound({
+      filePath: '/assets/sounds/portal_transition_music.mp3',
+      loop: true,
+      volume: 0.6
+    });
+
     const img = new Image();
     img.src = 'assets/images/pinky-character.png';
     img.onload = () => {
@@ -310,8 +318,9 @@ const PortalTransitionScene: React.FC<PortalTransitionSceneProps> = ({ onComplet
       frameCount = 0;
       gridDepthOffsetRef.current = 0;
       activeGlitchesRef.current = []; // Clear active glitches on unmount
+      stopSound('/assets/sounds/portal_transition_music.mp3', 1.0);
     };
-  }, [onComplete]);
+  }, [onComplete, playSound, stopSound]);
 
   return (
     <canvas 

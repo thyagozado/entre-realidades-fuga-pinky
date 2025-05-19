@@ -6,6 +6,7 @@ interface ModalProps {
   title?: string | React.ReactNode;
   children: React.ReactNode;
   actions?: React.ReactNode; // For buttons or other action elements
+  contentClassName?: string; // Nova prop para classes do container do conteúdo
   // maxWidth?: string; // Temporariamente removido para teste
 }
 
@@ -15,6 +16,7 @@ const Modal: React.FC<ModalProps> = ({
   title,
   children,
   actions,
+  contentClassName, // Nova prop
   // maxWidth = 'max-w-lg' // Temporariamente removido
 }) => {
   if (!isOpen) {
@@ -29,7 +31,7 @@ const Modal: React.FC<ModalProps> = ({
       onClick={onClose} // Optional: close on overlay click
     >
       <div
-        className={`bg-indigo-900 bg-opacity-[.98] p-6 md:p-7 rounded-lg shadow-2xl border-2 border-gray-300 w-[500px] max-w-[90vw]`} // Largura fixa maior para teste, com max-width para telas pequenas
+        className={`bg-indigo-900 bg-opacity-[.98] p-6 md:p-7 rounded-lg shadow-2xl border-2 border-gray-300 w-[500px] max-w-[90vw] ${contentClassName || ''}`} // Largura fixa maior para teste, com max-width para telas pequenas
         style={{ boxShadow: '0 0 8px rgba(255, 255, 255, 0.25)' }}
         onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal content
       >

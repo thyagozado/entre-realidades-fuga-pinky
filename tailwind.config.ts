@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from 'tailwindcss/plugin';
 
 export default {
 	darkMode: ["class"],
@@ -141,6 +142,11 @@ export default {
 					'50%': { clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)' },
 					'75%': { clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 15% 100%)' },
 					'100%': { clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)' }
+				},
+				'shake-right': {
+					'0%, 40%, 100%': { transform: 'translateX(0)' },
+					'50%, 70%': { transform: 'translateX(8px)' },
+					'60%': { transform: 'translateX(8px)' },
 				}
 			},
 			animation: {
@@ -154,9 +160,25 @@ export default {
 				'fade-in': 'fade-in 0.5s ease-in-out forwards',
 				'grid-scroll-x': 'grid-scroll-x 20s linear infinite',
 				'grid-scroll-y': 'grid-scroll-y 20s linear infinite',
-				'chomp': 'chomp 0.5s linear infinite'
+				'chomp': 'chomp 0.5s linear infinite',
+				'shake-right': 'shake-right 5s ease-in-out infinite'
 			}
 		}
 	},
-	plugins: [require("tailwindcss-animate")],
+	plugins: [
+		require("tailwindcss-animate"),
+		plugin(function({ addUtilities }) {
+			addUtilities({
+				'.hide-scrollbar': {
+					/* Para Chrome, Safari e Opera */
+					'&::-webkit-scrollbar': {
+						display: 'none',
+					},
+					/* Para IE, Edge e Firefox */
+					'-ms-overflow-style': 'none',  /* IE and Edge */
+					'scrollbar-width': 'none',  /* Firefox */
+				}
+			})
+		})
+	],
 } satisfies Config;

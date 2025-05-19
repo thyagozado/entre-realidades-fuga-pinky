@@ -259,12 +259,12 @@
 
 @keyframes sphere-aura-pulse {
   0%, 100% {
-    box-shadow: 0 0 40px 10px rgba(197, 14, 179, 0.35), /* Aura Rosa/Roxa - blur aumentado, spread aumentado levemente, opacidade levemente reduzida */
-                0 0 55px 20px rgba(10, 197, 197, 0.25); /* Aura Ciano - blur aumentado, spread aumentado levemente, opacidade levemente reduzida */
+    box-shadow: 0 0 15px 5px rgba(197, 14, 179, 0.25), /* Aura Rosa/Roxa - blur reduzido, spread reduzido, opacidade reduzida */
+                0 0 25px 8px rgba(10, 197, 197, 0.15);  /* Aura Ciano - blur reduzido, spread reduzido, opacidade reduzida */
   }
   50% {
-    box-shadow: 0 0 50px 15px rgba(220, 100, 255, 0.45), /* Aura mais intensa - blur aumentado, spread aumentado levemente, opacidade levemente reduzida */
-                0 0 70px 28px rgba(80, 220, 220, 0.35);
+    box-shadow: 0 0 20px 7px rgba(220, 100, 255, 0.35), /* Aura mais intensa - blur reduzido, spread reduzido, opacidade reduzida */
+                0 0 30px 12px rgba(80, 220, 220, 0.25);
   }
 }
 

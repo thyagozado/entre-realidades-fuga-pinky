@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 
 // Constantes de Configuração
-const TOTAL_DURATION_MS = 6000;
+const TOTAL_DURATION_MS = 8000; // Aumentado para acomodar o fade out global de 2s no final
+const FADE_OUT_DURATION_MS = 2000; // Novo: Duração do fade out global
 const CLEAR_ALPHA = 0.08; // Mais rastro
 
 // Partículas Principais
@@ -40,7 +41,7 @@ const GLITCH_COLOR_HUES = [300, 180, 60, 240, 0, 120]; // Adicionado vermelho e 
 
 // Animação do Pinky
 const PINKY_FADE_IN_DURATION_MS = 600;
-const PINKY_SHRINK_DURATION_MS = 2200; 
+const PINKY_SHRINK_DURATION_MS = 5200; // Aumentado em 3000ms (2200 + 3000)
 const PINKY_FADE_OUT_START_OFFSET_MS = 400; // Começa a desaparecer 400ms antes do shrink terminar
 const PINKY_INITIAL_SCALE_FACTOR_OF_HEIGHT = 0.75; 
 const PINKY_FINAL_SCALE_FACTOR_OF_HEIGHT = 0.005;  
@@ -56,6 +57,11 @@ interface DimensionalRiftSceneProps { onTransitionComplete: () => void; }
 interface Particle { x: number; y: number; angle: number; speed: number; colorHue: number; size: number; isWhite: boolean; baseLightness: number;}
 interface ConcentricRect { scale: number; opacity: number; hue: number; baseRotation: number; }
 interface ActiveGlitch { x: number; y: number; width: number; height: number; color: string; remainingFrames: number; }
+
+// Função de easing
+const easeInOutQuad = (t: number): number => {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+};
 
 const DimensionalRiftScene: React.FC<DimensionalRiftSceneProps> = ({ onTransitionComplete }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -220,17 +226,30 @@ const DimensionalRiftScene: React.FC<DimensionalRiftSceneProps> = ({ onTransitio
     const renderPinkyAnimation = (currentElapsedTimeMs: number) => {
         if (!isPinkyImageLoadedRef.current || !pinkyImageRef.current) return;
         const img = pinkyImageRef.current; const pinkyAspectRatio = img.width / img.height;
+        
         const fadeInProgress = Math.min(1, currentElapsedTimeMs / PINKY_FADE_IN_DURATION_MS);
         const shrinkEndTime = PINKY_SHRINK_DURATION_MS;
         const fadeOutStartTime = shrinkEndTime - PINKY_FADE_OUT_START_OFFSET_MS;
-        const shrinkProgress = Math.min(1, currentElapsedTimeMs / shrinkEndTime);
+        
+        let rawShrinkProgress = Math.min(1, currentElapsedTimeMs / shrinkEndTime);
+        const shrinkProgress = easeInOutQuad(rawShrinkProgress); // Aplicando easing
+        
         let fadeOutProgress = 1;
         if (currentElapsedTimeMs > fadeOutStartTime) {
-            fadeOutProgress = Math.max(0, 1 - (currentElapsedTimeMs - fadeOutStartTime) / (shrinkEndTime - fadeOutStartTime + PINKY_FADE_OUT_START_OFFSET_MS));
+            // Ajustar o cálculo do fadeOutProgress para considerar a nova duração total do shrink
+            const fadeOutEffectDuration = shrinkEndTime - fadeOutStartTime + PINKY_FADE_OUT_START_OFFSET_MS;
+            fadeOutProgress = Math.max(0, 1 - (currentElapsedTimeMs - fadeOutStartTime) / fadeOutEffectDuration);
         }
-        const currentBaseHeight = PINKY_INITIAL_SCALE_FACTOR_OF_HEIGHT * canvas.height - (PINKY_INITIAL_SCALE_FACTOR_OF_HEIGHT * canvas.height - PINKY_FINAL_SCALE_FACTOR_OF_HEIGHT * canvas.height) * shrinkProgress;
-        const pinkyDisplayHeight = Math.max(0, currentBaseHeight); const pinkyDisplayWidth = pinkyDisplayHeight * pinkyAspectRatio;
-        const centerX = canvas.width / 2; const centerY = canvas.height / 2;
+        
+        const currentBaseHeight = PINKY_INITIAL_SCALE_FACTOR_OF_HEIGHT * canvas.height - 
+                                (PINKY_INITIAL_SCALE_FACTOR_OF_HEIGHT * canvas.height - PINKY_FINAL_SCALE_FACTOR_OF_HEIGHT * canvas.height) * shrinkProgress;
+        
+        const pinkyDisplayHeight = Math.max(0, currentBaseHeight);
+        const pinkyDisplayWidth = pinkyDisplayHeight * pinkyAspectRatio;
+        
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        
         ctx.save();
         ctx.globalAlpha = fadeInProgress * fadeOutProgress;
         ctx.imageSmoothingEnabled = false;
@@ -241,18 +260,47 @@ const DimensionalRiftScene: React.FC<DimensionalRiftSceneProps> = ({ onTransitio
     };
 
     const renderLoop = () => {
-      frameCountRef.current++; const currentElapsedTimeMs = performance.now() - startTimeRef.current;
-      ctx.fillStyle = `rgba(0, 0, 0, ${CLEAR_ALPHA})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      renderBackgroundGrid(frameCountRef.current); // Nova malha de fundo PRIMEIRO
+      const canvas = canvasRef.current; if (!canvas) return;
+      const ctx = canvas.getContext('2d'); if (!ctx) return;
+      animationFrameIdRef.current = requestAnimationFrame(renderLoop);
+
+      const currentElapsedTimeMs = performance.now() - startTimeRef.current;
+      frameCountRef.current++;
+
+      // Limpar canvas com rastro
+      ctx.fillStyle = `rgba(0, 0, 0, ${CLEAR_ALPHA})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      renderBackgroundGrid(frameCountRef.current);
       renderGrid(frameCountRef.current);
-      renderPinkyAnimation(currentElapsedTimeMs);
-      renderParticles_logic(); 
+      renderParticles_logic();
       renderNoise(frameCountRef.current);
+      renderPinkyAnimation(currentElapsedTimeMs);
       renderEdgeGlitches(frameCountRef.current);
-      if (currentElapsedTimeMs < TOTAL_DURATION_MS) { animationFrameIdRef.current = requestAnimationFrame(renderLoop); }
-      else { if (onTransitionComplete) { animationFrameIdRef.current = null; onTransitionComplete();} }
+
+      // Lógica de Fade Out Global
+      if (currentElapsedTimeMs >= TOTAL_DURATION_MS - FADE_OUT_DURATION_MS) {
+        const timeIntoFadeOut = currentElapsedTimeMs - (TOTAL_DURATION_MS - FADE_OUT_DURATION_MS);
+        const fadeOutProgress = Math.min(1, timeIntoFadeOut / FADE_OUT_DURATION_MS);
+        ctx.fillStyle = `rgba(0, 0, 0, ${fadeOutProgress})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      if (currentElapsedTimeMs >= TOTAL_DURATION_MS) {
+        if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+        console.log("DimensionalRiftScene: Transition complete, calling onTransitionComplete.");
+        onTransitionComplete();
+        return;
+      }
     };
-    renderLoop();
+
+    // Iniciar o loop de renderização
+    if (!animationFrameIdRef.current) { // Evitar múltiplos loops se o componente re-renderizar por algum motivo
+        console.log("DimensionalRiftScene: Starting render loop.");
+        animationFrameIdRef.current = requestAnimationFrame(renderLoop);
+    }
+
     const transitionTimer = setTimeout(() => { if (animationFrameIdRef.current !== null && onTransitionComplete) { /*onTransitionComplete();*/ } }, TOTAL_DURATION_MS + 200);
     return () => { if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current); clearTimeout(transitionTimer); animationFrameIdRef.current = null; };
   }, [onTransitionComplete]);

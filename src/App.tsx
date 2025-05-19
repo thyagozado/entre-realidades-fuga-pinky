@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import StartScreen from './pages/StartScreen';
 import ConsciousnessScene from './pages/ConsciousnessScene';
-import AchievementScreen from './pages/AchievementScreen';
 import PacManGameScene from './pages/PacManGameScene';
 import { GameOverReason } from './components/PacManGame';
 import WorldMapScene from './pages/WorldMapScene';
@@ -10,19 +9,39 @@ import SkyRelicsScene from './pages/SkyRelicsScene';
 import DimensionalRiftGatewayScene from './pages/DimensionalRiftGatewayScene';
 import FinalCreditsScene from './pages/FinalCreditsScene';
 import BibliotecaSapencialScene from './pages/BibliotecaSapencialScene';
+import OracleTempleScene from './pages/OracleTempleScene';
+import useAudioManager from './hooks/useAudioManager';
 
-export type SceneName = 'start' | 'consciousness' | 'achievement' | 'pacman' | 'worldMap' | 'dimensional_rift' | 'sky_relics' | 'riftGateway' | 'finalCredits' | 'biblioteca';
+export type SceneName = 'start' | 'consciousness' | 'pacman' | 'worldMap' | 'dimensional_rift' | 'sky_relics' | 'riftGateway' | 'finalCredits' | 'biblioteca' | 'oracleTemple';
 
 const Index: React.FC = () => {
   const [currentScene, setCurrentScene] = useState<SceneName>('start');
+  const audioManager = useAudioManager();
+
+  useEffect(() => {
+    const resume = () => {
+      audioManager.manualResumeAudioContext();
+      window.removeEventListener('click', resume, true);
+      window.removeEventListener('keydown', resume, true);
+      window.removeEventListener('touchstart', resume, true);
+    };
+    window.addEventListener('click', resume, { once: true, capture: true });
+    window.addEventListener('keydown', resume, { once: true, capture: true });
+    window.addEventListener('touchstart', resume, { once: true, capture: true });
+    return () => {
+      window.removeEventListener('click', resume, true);
+      window.removeEventListener('keydown', resume, true);
+      window.removeEventListener('touchstart', resume, true);
+    };
+  }, [audioManager]);
 
   const handleSceneComplete = (nextScene: SceneName) => {
-    console.log(`[Index.tsx] handleSceneComplete: Mudando para cena ${nextScene}`);
+    console.log(`[App.tsx] handleSceneComplete: Mudando para cena ${nextScene}`);
     setCurrentScene(nextScene);
   };
 
   const handleGameOver = (reason: GameOverReason) => {
-    console.log(`[Index.tsx] handleGameOver: Razão ${reason.type}`);
+    console.log(`[App.tsx] handleGameOver: Razão ${reason.type}`);
     if (reason.type === 'exit_reached') {
       setCurrentScene('dimensional_rift');
     } else if (reason.type === 'caught_by_pacman') {
@@ -33,41 +52,33 @@ const Index: React.FC = () => {
   };
 
   const handleNavigateFromWorldMap = (targetPointId: string) => {
-    console.log(`[Index.tsx] handleNavigateFromWorldMap para: ${targetPointId}`);
+    console.log(`[App.tsx] handleNavigateFromWorldMap para: ${targetPointId}`);
     if (targetPointId === 'vestigios_ceu') {
       setCurrentScene('sky_relics');
     } else if (targetPointId === 'biblioteca_sapencial') {
       setCurrentScene('biblioteca');
     } else if (targetPointId === 'oraculo') {
-      console.log("Navegação para Oráculo ainda não implementada.");
+      setCurrentScene('oracleTemple');
     } else if (targetPointId === 'fenda_primeiro_raio') {
       setCurrentScene('riftGateway');
     }
   };
 
   const renderScene = () => {
-    console.log(`[Index.tsx] Renderizando cena: ${currentScene}`);
+    console.log(`[App.tsx] Renderizando cena: ${currentScene}`);
     switch (currentScene) {
       case 'start':
         return <StartScreen onStart={() => handleSceneComplete('consciousness')} />;
       case 'consciousness':
         return <ConsciousnessScene
-                 onContinue={() => handleSceneComplete('achievement')}
-               />;
-      case 'achievement':
-        return <AchievementScreen 
-                 onContinue={() => handleSceneComplete('pacman')} 
-                 achievementTitle="Germinar da Consciência"
-                 achievementDescription="Você sentiu pela primeira vez que há algo além do ciclo. Uma nova percepção começou a brotar."
-                 progressNumerator={1}
-                 progressDenominator={4}
+                 onContinue={() => handleSceneComplete('pacman')}
                />;
       case 'pacman':
         return <PacManGameScene onGameOver={handleGameOver} />;
       case 'dimensional_rift':
         return <DimensionalRiftScene onTransitionComplete={() => setCurrentScene('sky_relics')} />;
       case 'worldMap':
-        return <WorldMapScene onNavigate={handleNavigateFromWorldMap} />;
+        return <WorldMapScene onNavigate={handleNavigateFromWorldMap} bosqueCompleted={false} />;
       case 'sky_relics':
         return <SkyRelicsScene onComplete={() => setCurrentScene('worldMap')} />;
       case 'riftGateway':
@@ -77,6 +88,8 @@ const Index: React.FC = () => {
                       setCurrentScene('finalCredits');
                     } else if (outcome === 'pacman') {
                       setCurrentScene('pacman');
+                    } else if (outcome === 'startOver') {
+                      setCurrentScene('start');
                     }
                   }}
                   onReturnToMap={() => setCurrentScene('worldMap')}
@@ -85,8 +98,16 @@ const Index: React.FC = () => {
         return <FinalCreditsScene onRestart={() => setCurrentScene('start')} />;
       case 'biblioteca':
         return <BibliotecaSapencialScene onReturnToMap={() => setCurrentScene('worldMap')} />;
+      case 'oracleTemple':
+        return <OracleTempleScene 
+                  onExit={() => setCurrentScene('worldMap')} 
+                  onInteractionComplete={(query) => {
+                    console.log("Consulta ao Oráculo enviada:", query);
+                  }}
+                />;
       default:
-        console.warn(`[Index.tsx] Cena desconhecida: ${currentScene}. Voltando para 'start'.`);
+        const exhaustiveCheck: never = currentScene;
+        console.warn(`[App.tsx] Cena desconhecida: ${exhaustiveCheck}. Voltando para 'start'.`);
         return <StartScreen onStart={() => handleSceneComplete('consciousness')} />;
     }
   };

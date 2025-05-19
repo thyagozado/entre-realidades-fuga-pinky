@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../components/ui/Modal'; // Importe o novo Modal
 import ReturnToMapButton from '../components/ui/ReturnToMapButton'; // Importar o novo botão
+import useAudioManager from '../hooks/useAudioManager'; // Adicionado
 
 // --- BEGIN COPIED AND ADAPTED FROM DimensionalRiftScene ---
 
@@ -54,7 +55,7 @@ interface GatewayActiveGlitch { x: number; y: number; width: number; height: num
 // --- END COPIED AND ADAPTED FROM DimensionalRiftScene ---
 
 interface DimensionalRiftGatewaySceneProps {
-  onComplete: (outcome: 'finalScreen' | 'pacman') => void;
+  onComplete: (outcome: 'finalScreen' | 'pacman' | 'startOver') => void;
   onReturnToMap?: () => void; // Nova prop para voltar ao mapa
 }
 
@@ -76,6 +77,8 @@ const DimensionalRiftGatewayScene: React.FC<DimensionalRiftGatewaySceneProps> = 
   const concentricRectsRef = useRef<GatewayConcentricRect[]>([]);
   const activeGlitchesRef = useRef<GatewayActiveGlitch[]>([]);
   const frameCountRef = useRef(0);
+
+  const { playSound, stopSound, loadSound } = useAudioManager(); // Adicionado
 
   // Efeito para o texto inicial de 7 segundos
   useEffect(() => {
@@ -274,13 +277,20 @@ const DimensionalRiftGatewayScene: React.FC<DimensionalRiftGatewaySceneProps> = 
     };
   }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
 
+  useEffect(() => {
+    playSound({
+      filePath: '/assets/sounds/fenda_primeiro_raio_music.mp3',
+      loop: true,
+      fadeInDuration: 1.5,
+      volume: 0.8
+    });
+    return () => {
+      stopSound('/assets/sounds/fenda_primeiro_raio_music.mp3', 1.5);
+    };
+  }, [playSound, stopSound]);
+
   const handleSphereClick = () => {
-    if (sphereRef.current) {
-      sphereRef.current.classList.add('sphere-clicked-zoom');
-      setTimeout(() => {
-        sphereRef.current?.classList.remove('sphere-clicked-zoom');
-      }, 300); // Duration of the zoom animation (matches transition duration in CSS)
-    }
+    setIsSphereVibrating(false); // Para a vibração
     setIsAccessModalOpen(true);
   };
 
@@ -312,7 +322,7 @@ const DimensionalRiftGatewayScene: React.FC<DimensionalRiftGatewaySceneProps> = 
 
   const handleDesistGiveUp = () => {
     setIsDesistConfirmModalOpen(false);
-    onComplete('pacman'); // Retorna ao início do jogo
+    onComplete('startOver'); // Alterado para 'startOver'
   };
 
 
@@ -334,7 +344,7 @@ const DimensionalRiftGatewayScene: React.FC<DimensionalRiftGatewaySceneProps> = 
       <div 
         ref={sphereRef}
         className={`sphere-base absolute z-10 ${isSphereVibrating ? 'sphere-vibrating' : 'sphere-static'}`}
-        onClick={!showInitialText ? handleSphereClick : undefined} 
+        onClick={handleSphereClick} 
       >
         {/* Conteúdo da esfera se houver, ou deixar vazio para o gradiente */}
       </div>
@@ -353,48 +363,95 @@ const DimensionalRiftGatewayScene: React.FC<DimensionalRiftGatewaySceneProps> = 
         </div>
       )}
 
-      {/* Modal: Está preparado para acessar? */}
-      <Modal 
-        isOpen={isAccessModalOpen} 
+      {/* Modal para Escolha de Acesso */}
+      <Modal
+        isOpen={isAccessModalOpen}
         onClose={() => setIsAccessModalOpen(false)}
+        title={
+          <div className="pt-2.5">
+            <h2 className="text-xl md:text-2xl font-pixel text-white text-center">
+              Você liberou uma faixa de ruptura.
+            </h2>
+          </div>
+        }
       >
-        <div className="text-center">
-            <p className="text-2xl text-white mb-2">Você tem acesso a uma faixa de ruptura.</p>
+        <div className="text-center mt-4">
             <p className="text-lg text-gray-300">Está preparado para acessar?</p>
         </div>
-        actions={
-          <>
-            <button onClick={handleAccessPrepared} className="font-pixel bg-green-600 hover:bg-green-500 text-white py-1.5 px-3 rounded text-sm">Estou preparado</button>
-            <button onClick={handleAccessAfraid} className="font-pixel bg-red-600 hover:bg-red-500 text-white py-1.5 px-3 rounded text-sm">Tenho medo</button>
-          </>
-        }
+        <div className="mt-8 flex flex-row justify-center items-center space-x-4">
+          <button
+            onClick={handleAccessPrepared}
+            className="font-pixel px-6 py-3 rounded-md text-white bg-green-600 hover:bg-green-500 transition-colors duration-300 w-auto"
+          >
+            Estou preparado
+          </button>
+          <button
+            onClick={handleAccessAfraid}
+            className="font-pixel px-6 py-3 rounded-md text-gray-300 bg-blue-800/90 hover:bg-blue-700/90 transition-colors duration-300 w-auto"
+          >
+            Tenho medo
+          </button>
+        </div>
       </Modal>
 
-      {/* Modal: QR Code */}
-      <Modal isOpen={isQrCodeModalOpen} onClose={() => setIsQrCodeModalOpen(false)} maxWidth="max-w-xs">
-        <div className="text-center">
-            <div className="bg-gray-800 p-2 rounded mb-3">
-                 <p className="text-md text-white">Escaneie o QR Code para ajudar Pinky</p>
-            </div>
-            <img src="/assets/images/QR_Code_AR.png" alt="QR Code AR" className="w-48 h-48 mx-auto mb-3 border-4 border-gray-700 p-1"/>
+      {/* Modal de Instrução do QR Code */}
+      <Modal
+        isOpen={isQrCodeModalOpen}
+        onClose={() => {
+          setIsQrCodeModalOpen(false);
+          // Talvez reiniciar a vibração da esfera se o usuário fechar este modal sem interagir
+          // setIsSphereVibrating(true);
+        }}
+        title="Um Eco Tecnológico na Fenda"
+      >
+        <div className="mt-4 flex flex-col items-center text-center px-2.5">
+          <p className="text-sm text-gray-300 mb-4 font-pixel px-4">
+            {showPointCameraInstruction 
+              ? "Aponte com a câmera para ajudar Pinky a acessar"
+              : "Aponte a câmera para revelar o caminho de Pinky"}
+          </p>
+          
+          {/* QR Code real */}
+          <div className="w-40 h-40 bg-gray-800/70 border-2 border-purple-500/80 flex items-center justify-center mb-6 mt-[15px]">
+            <img src="/assets/images/QR_CODE.png" alt="QR Code" className="w-full h-full object-contain" />
+          </div>
+          
+          <button
+            onClick={handleQrContinue}
+            className="font-pixel px-8 py-3 rounded-md text-white bg-transparent border-2 border-white 
+                       shadow-[0_0_4px_#fff,0_0_8px_#fff,0_0_12px_#00ffff,inset_0_0_4px_#fff]  /* Neon diminuído */
+                       hover:bg-green-600 hover:shadow-none hover:text-white 
+                       transition-all duration-300 w-auto text-lg"
+          >
+            {showPointCameraInstruction ? "Entendido" : "Continuar"}
+          </button>
         </div>
-        actions={
-            <button onClick={handleQrContinue} className="font-pixel bg-gray-600 hover:bg-gray-500 text-white py-1.5 px-3 rounded text-sm mx-auto">Continuar</button>
-        }
       </Modal>
 
-      {/* Modal: Desistir? */}
-      <Modal isOpen={isDesistConfirmModalOpen} onClose={() => setIsDesistConfirmModalOpen(false)}>
-        <div className="text-center">
-            <p className="text-xl text-white mb-1">Desistir te levará de volta ao seu mundo original e você perderá a consciência conquistada.</p>
-            <p className="text-md text-gray-400">Você tem certeza?</p>
+      {/* Modal para Confirmação de Desistência */}
+      <Modal
+        isOpen={isDesistConfirmModalOpen}
+        onClose={() => setIsDesistConfirmModalOpen(false)}
+        title="Desistir agora é abandonar a consciência adquirida."
+        contentClassName="!bg-red-900 !bg-opacity-80"
+      >
+        <div className="text-center mt-3 mb-6">
+          <p className="text-base text-gray-400">Você tem certeza?</p>
         </div>
-        actions={
-          <>
-            <button onClick={handleDesistTry} className="font-pixel bg-yellow-500 hover:bg-yellow-400 text-black py-1.5 px-3 rounded text-sm">Vou tentar</button>
-            <button onClick={handleDesistGiveUp} className="font-pixel bg-red-700 hover:bg-red-600 text-white py-1.5 px-3 rounded text-sm">Eu desisto</button>
-          </>
-        }
+        <div className="mt-8 flex flex-row justify-center items-center space-x-4">
+          <button
+            onClick={handleDesistTry}
+            className="font-pixel text-sm px-8 py-3 rounded-md text-white bg-green-600 hover:bg-green-500 transition-colors duration-300 w-auto"
+          >
+            Quero continuar
+          </button>
+          <button
+            onClick={handleDesistGiveUp}
+            className="font-pixel text-sm px-8 py-3 rounded-md text-gray-200 bg-red-800/80 hover:bg-red-700/90 transition-colors duration-300 w-auto"
+          >
+            Retornar ao início
+          </button>
+        </div>
       </Modal>
 
     </div>

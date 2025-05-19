@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DPad from './ui/DPad'; // Corrigido o caminho de importação
+import useAudioManager from '../hooks/useAudioManager'; // Adicionado
 
 // Game constants
 const CELL_SIZE = 20;
@@ -19,6 +21,223 @@ const DOWN = { x: 0, y: 1 };
 const LEFT = { x: -1, y: 0 };
 const RIGHT = { x: 1, y: 0 };
 
+// Estilos CSS para os personagens e D-Pad
+const gameSpecificStyles = `
+  /* ----------------------------------------
+     Pac-Man (User Provided - New)
+  ------------------------------------------*/
+  .pacman {
+    width: 100%; /* Ocupa CELL_SIZE via container */
+    height: 100%; /* Ocupa CELL_SIZE via container */
+    border-radius: 50%;
+    background: #F2D648; /* Cor do Pac-Man do novo CSS */
+    position: relative;
+    /* margin-top: 20px;  removido, o posicionamento é pela grid */
+  }
+
+  .pacman__eye {
+    position: absolute;
+    /* width: 10px (de 100px) -> 10% */
+    width: 10%; 
+    /* height: 10px (de 100px) -> 10% */
+    height: 10%;
+    border-radius: 50%;
+    /* top: 20px (de 100px) -> 20% */
+    top: 20%; 
+    /* right: 40px (de 100px) -> 40% */
+    right: 40%; 
+    background: #333333;
+  }
+
+  .pacman__mouth {
+    background: #000; /* Cor do fundo do jogo para a boca */
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    /* clip-path da animação é usado */
+    animation-name: eat;
+    animation-duration: 0.7s;
+    animation-iteration-count: infinite;
+  }
+
+  @keyframes eat {
+    0% {
+      clip-path: polygon(100% 74%, 44% 48%, 100% 21%);
+    }
+    25% {
+      clip-path: polygon(100% 60%, 44% 48%, 100% 40%);
+    }
+    50% {
+      clip-path: polygon(100% 50%, 44% 48%, 100% 50%);
+    }
+    75% {
+     clip-path: polygon(100% 59%, 44% 48%, 100% 35%);
+    }
+    100% {
+     clip-path: polygon(100% 74%, 44% 48%, 100% 21%);
+    }
+  }
+
+  /* ----------------------------------------
+     Fantasma Rosa (Pinky) - New User Provided
+  ------------------------------------------*/
+  .ghost {
+    /* Design original: width: 120px, height: 160px */
+    /* No jogo, vai ocupar 100% de CELL_SIZE e manter proporções internas */
+    width: 100%;
+    height: 100%;
+    border-radius: 50% 50% 0 0; /* Original: 100% 100% 0 0, adaptado para % do elemento */
+    display: inline-block; /* Removido ou ajustado, pois controlamos com flex no container */
+    position: relative;
+    /* margin: 20px;  removido, o posicionamento é pela grid */
+  }
+
+  .pinky.ghost {
+    background-color: #FF69B4; /* Cor rosa específica para Pinky */
+  }
+
+  .ghost .eyes{
+    /* Original: height: 60px (de 160px ghost) -> 37.5% */
+    /* Original: width: 90px (de 120px ghost) -> 75% */
+    /* Original: left: 50%; margin-left: -45px (-37.5% da largura do ghost) */
+    /* Original: top: 50px (de 160px ghost) -> 31.25% */
+    height: 37.5%;
+    width: 75%;
+    left: 50%;
+    transform: translateX(-50%); /* Alternativa ao margin-left negativo */
+    position: absolute;
+    top: 31.25%;
+  }
+
+  .ghost .eye{
+    /* Original: height: 60px (de 60px .eyes container) -> 100% */
+    /* Original: width: 30px (de 90px .eyes container) -> 33.33% */
+    background: #fff;
+    border-radius: 50%; /* Original: 100% */
+    height: 100%; 
+    width: 33.33%;
+    position: relative; /* Para posicionar a íris dentro */
+  }
+
+  .ghost .iris{
+    /* Original: height: 40px (de 60px .eye) -> 66.67% */
+    /* Original: width: 20px (de 30px .eye) -> 66.67% */
+    /* Original: top: 10px (de 60px .eye) -> 16.67% */
+    background: blue; /* Cor da íris */
+    border-radius: 50%; /* Original: 100% */
+    height: 66.67%;
+    width: 66.67%;
+    position: absolute;
+    top: 16.67%;
+    /* CSS Vars para direção */
+    --pupil-offset-x: 0%;
+    --pupil-offset-y: 0%;
+  }
+
+  .ghost .leftEye{ float: left; }
+  .ghost .leftEye .iris{
+    /* Original: left: 5px (de 30px .eye) -> 16.67% */
+    left: 16.67%;
+    transform: translate(var(--pupil-offset-x), var(--pupil-offset-y));
+  }
+
+  .ghost .rightEye{ float: right; }
+  .ghost .rightEye .iris{
+    /* Original: right: 5px (de 30px .eye) -> 16.67% */
+    /* Para posicionar com right e permitir transform, pode ser melhor usar left e ajustar */
+    /* Ou usar left e transform: translateX para o posicionamento base e direcional */
+    left: auto; /* Reseta left se estiver usando right */
+    right: 16.67%; 
+    transform: translate(var(--pupil-offset-x), var(--pupil-offset-y));
+  }
+
+  .ghost .ghostTail{
+    /* Original: bottom: -20px (de 160px ghost) -> -12.5% */
+    /* Original: height: 20px (de 160px ghost) -> 12.5% */
+    /* Original: width: 120px (de 120px ghost) -> 100% */
+    background-repeat: repeat-x;
+    bottom: -12.5%; 
+    height: 12.5%;
+    position: absolute;
+    width: 100%;
+  }
+
+  .pinky.ghost .ghostTail{
+    /* Original background-size: 20px 20px. (20/120_ghost_width)*100% = 16.67% */
+    background:
+      linear-gradient(-45deg, transparent 75%, #FF69B4 75%) 0 50%,
+      linear-gradient( 45deg, transparent 75%, #FF69B4 75%) 0 50%;
+    background-size: 16.67% 100%; /* Largura do padrão, Altura do padrão (ocupa toda a altura da cauda) */
+  }
+  
+  .d-pad-container {
+    display: grid;
+    grid-template-areas:
+      ". up ."
+      "left middle right"
+      ". down .";
+    gap: 5px;
+    margin-top: 20px;
+    user-select: none;
+  }
+
+  .d-pad-button {
+    background-color: #333;
+    color: white;
+    border: 2px solid #555;
+    border-radius: 8px;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+  .d-pad-button:hover {
+    background-color: #444;
+  }
+  .d-pad-button:active {
+    background-color: #222;
+    transform: translateY(1px);
+  }
+  .up { grid-area: up; }
+  .down { grid-area: down; }
+  .left { grid-area: left; }
+  .right { grid-area: right; }
+  .middle { 
+    grid-area: middle;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  /* Animação de flutuar para Pinky (já existe em player-pinky, mas se precisar ajustar) */
+  /* @keyframes floatPlayer { ... } */
+  /* .animate-float-player { animation: floatPlayer 3s ease-in-out infinite; } */
+
+  /* Estilos para Dots e Power Pellets */
+  .cell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .dot {
+    width: 25%; /* Pequeno */
+    height: 25%;
+    border-radius: 50%;
+    /* A cor será definida inline por Tailwind (bg-white) */
+  }
+  .power-pellet {
+    width: 50%; /* Maior que o dot */
+    height: 50%;
+    border-radius: 50%;
+    /* A cor será definida inline por Tailwind (bg-gray-300) e terá animate-pulse */
+  }
+
+`;
+
 interface Position {
   x: number;
   y: number;
@@ -31,16 +250,19 @@ interface PacManGameProps {
   onGameOver: (reason: GameOverReason) => void;
 }
 
-console.log('PacManGame component mounted'); 
+// console.log('PacManGame component mounted'); 
 
 const PacManGame: React.FC<PacManGameProps> = ({ onGameOver }) => {
   const [grid, setGrid] = useState<number[][]>([]);
-  const [playerPos, setPlayerPos] = useState<Position>({ x: 14, y: 23 }); 
+  const [playerPos, setPlayerPos] = useState<Position>({ x: 14, y: 15 }); 
   const [pacmanPos, setPacmanPos] = useState<Position>({ x: 14, y: 17 }); 
   const [playerDirection, setPlayerDirection] = useState<Position>(UP);
   const [pacmanDirection, setPacmanDirection] = useState<Position>(LEFT);
   const [gameActive, setGameActive] = useState(true);
   const [dotsRemaining, setDotsRemaining] = useState(0);
+  const [showMovementTooltip, setShowMovementTooltip] = useState(false);
+  const [hasPlayerMoved, setHasPlayerMoved] = useState(false);
+  const [gameOverMessage, setGameOverMessage] = useState('');
   
   const gameLoopRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef(0);
@@ -53,6 +275,13 @@ const PacManGame: React.FC<PacManGameProps> = ({ onGameOver }) => {
   const pacmanDirectionRef = useRef<Position>(pacmanDirection);
   const gridRef = useRef<number[][]>(grid);
   const gameActiveRef = useRef<boolean>(gameActive);
+  const hasPlayerMovedRef = useRef<boolean>(hasPlayerMoved); // Ref for player movement status
+
+  const outerGridWrapperRef = useRef<HTMLDivElement>(null);
+  const gameGridContainerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  const { playSound } = useAudioManager(); // Adicionado
 
   // Sincronizar refs com o estado
   useEffect(() => { playerPosRef.current = playerPos; }, [playerPos]);
@@ -61,7 +290,18 @@ const PacManGame: React.FC<PacManGameProps> = ({ onGameOver }) => {
   useEffect(() => { pacmanDirectionRef.current = pacmanDirection; }, [pacmanDirection]);
   useEffect(() => { gridRef.current = grid; }, [grid]);
   useEffect(() => { gameActiveRef.current = gameActive; }, [gameActive]);
+  useEffect(() => { hasPlayerMovedRef.current = hasPlayerMoved; }, [hasPlayerMoved]);
 
+  // Injetar estilos CSS específicos do jogo
+  useEffect(() => {
+    const styleSheet = document.createElement("style");
+    styleSheet.type = "text/css";
+    styleSheet.innerText = gameSpecificStyles;
+    document.head.appendChild(styleSheet);
+    return () => {
+      document.head.removeChild(styleSheet);
+    };
+  }, []);
 
   useEffect(() => {
     console.log("[Init] Initializing game grid and listeners.");
@@ -78,9 +318,8 @@ const PacManGame: React.FC<PacManGameProps> = ({ onGameOver }) => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     
-    // Iniciar o loop de jogo usando a ref gameActiveRef
     if (gameActiveRef.current) {
-    startGameLoop();
+      startGameLoop();
     }
     
     return () => {
@@ -98,12 +337,58 @@ const PacManGame: React.FC<PacManGameProps> = ({ onGameOver }) => {
     if (gridRef.current.length > 0 && playerPosRef.current.y < gridRef.current.length && playerPosRef.current.x < gridRef.current[0].length) {
       if (gridRef.current[playerPosRef.current.y]?.[playerPosRef.current.x] === EXIT) {
         console.log("[Game Over] Pinky reached EXIT!");
-      setGameActive(false);
+        setGameActive(false);
+        playSound({
+          filePath: '/assets/sounds/portal_transition_sfx.mp3',
+          loop: false,
+          volume: 1.0
+        });
         onGameOver({ type: 'exit_reached' });
-    }
+      }
     }
   }, [playerPos, onGameOver]); // Depende do estado playerPos para checar a condição de saída
 
+  useEffect(() => {
+    const calculateScale = () => {
+      if (outerGridWrapperRef.current && gameGridContainerRef.current) {
+        const actualGameWidth = GRID_WIDTH * CELL_SIZE;
+        const actualGameHeight = GRID_HEIGHT * CELL_SIZE;
+
+        const wrapperWidth = outerGridWrapperRef.current.offsetWidth;
+        const wrapperHeight = outerGridWrapperRef.current.offsetHeight;
+
+        if (actualGameWidth === 0 || actualGameHeight === 0 || wrapperWidth === 0 || wrapperHeight === 0) {
+            // Evita divisão por zero ou cálculo com dimensões não prontas
+            setScale(1);
+            return;
+        }
+
+        const scaleX = wrapperWidth / actualGameWidth;
+        const scaleY = wrapperHeight / actualGameHeight;
+        const newScale = Math.min(scaleX, scaleY, 1); // Não escalar além de 100%
+        
+        setScale(newScale);
+      }
+    };
+
+    calculateScale(); // Calcula na montagem
+    window.addEventListener('resize', calculateScale);
+    return () => window.removeEventListener('resize', calculateScale);
+  }, []); // Dependências vazias para rodar na montagem e adicionar/remover listener
+
+  useEffect(() => {
+    // Effect for tooltip visibility based on player movement
+    if (!hasPlayerMovedRef.current) {
+      const tooltipTimer = setTimeout(() => {
+        if (!hasPlayerMovedRef.current) { // Double check if player hasn't moved
+          setShowMovementTooltip(true);
+        }
+      }, 10000); // Show tooltip after 10 seconds of no action
+      return () => clearTimeout(tooltipTimer); 
+    } else {
+      setShowMovementTooltip(false); // If player has already moved, ensure tooltip is hidden
+    }
+  }, [hasPlayerMoved]); // Depend on hasPlayerMoved state
 
   const createInitialGrid = () => {
     const mazeTemplate = [
@@ -142,9 +427,20 @@ const PacManGame: React.FC<PacManGameProps> = ({ onGameOver }) => {
     return mazeTemplate;
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => { keysPressed.current.add(e.key); updatePlayerDirectionFromInput(e.key); };
+  const handleKeyDown = (e: KeyboardEvent) => { 
+    keysPressed.current.add(e.key); 
+    updatePlayerDirectionFromInput(e.key); 
+    if (!hasPlayerMovedRef.current) {
+      setHasPlayerMoved(true); // State will be set, then useEffect for tooltip will hide it.
+    }
+  };
   const handleKeyUp = (e: KeyboardEvent) => { keysPressed.current.delete(e.key);};
-  const handleControlClick = (directionKey: string) => { updatePlayerDirectionFromInput(directionKey); };
+  const handleControlClick = (directionKey: string) => { 
+    updatePlayerDirectionFromInput(directionKey); 
+    if (!hasPlayerMovedRef.current) {
+      setHasPlayerMoved(true);
+    }
+  };
 
   const updatePlayerDirectionFromInput = (key: string) => {
     // console.log(`[Input] Key: ${key}`);
@@ -311,151 +607,141 @@ const PacManGame: React.FC<PacManGameProps> = ({ onGameOver }) => {
   
   // Render game elements
   const renderCell = (cellType: number, rowIndex: number, colIndex: number) => {
-    // Render Pac-Man
-    if (pacmanPos.x === colIndex && pacmanPos.y === rowIndex) {
-      let mouthRotation = '0deg';
-      if (pacmanDirection.x === 1) mouthRotation = '0deg'; 
-      else if (pacmanDirection.x === -1) mouthRotation = '180deg'; 
-      else if (pacmanDirection.y === -1) mouthRotation = '270deg'; 
-      else if (pacmanDirection.y === 1) mouthRotation = '90deg'; 
-
-      return (
-        <div 
-          key={`${rowIndex}-${colIndex}-pacman-container`} 
-          className="absolute flex items-center justify-center"
-          style={{ 
-            width: CELL_SIZE, height: CELL_SIZE, 
-            left: colIndex * CELL_SIZE, top: rowIndex * CELL_SIZE,
-            zIndex: 10
-          }}
-        >
-          <div 
-            className="relative pacman-body"
-            style={{
-              width: '100%', height: '100%', 
-              backgroundColor: '#FFFF00', 
-              borderRadius: '50%',
-              overflow: 'hidden' 
-            }}
-          >
-            <div 
-              className="absolute pacman-mouth"
-              style={{
-                width: 0, height: 0, 
-                borderRight: `${CELL_SIZE / 2}px solid #000`, 
-                borderTop: `${CELL_SIZE / 2}px solid transparent`,
-                borderBottom: `${CELL_SIZE / 2}px solid transparent`,
-                left: '50%', top: '0',     
-                transformOrigin: '0% 50%', 
-                transform: `rotate(${mouthRotation})`, // Simplificado o transform da boca
-              }}
-            />
-          </div>
-        </div>
-      );
-    }
-    
-    // Render player (Pinky)
-    if (playerPos.x === colIndex && playerPos.y === rowIndex) {
-      return (
-        <div 
-          key={`${rowIndex}-${colIndex}-player`} 
-          className="absolute ghost-player flex items-center justify-center"
-          style={{ 
-            width: CELL_SIZE, height: CELL_SIZE, 
-            left: colIndex * CELL_SIZE, top: rowIndex * CELL_SIZE,
-            zIndex: 10
-          }}
-        >
-            <img 
-              src="assets/images/pinky-character.png" 
-              alt="Pinky" 
-              className="w-full h-full pixelated-image" 
-              style={{ objectFit: 'contain' }} 
-            />
-        </div>
-      );
-    }
-    
+    const key = `${rowIndex}-${colIndex}`;
     switch (cellType) {
       case WALL:
-        return ( <div key={`${rowIndex}-${colIndex}-wall`} className="absolute" style={{ width: CELL_SIZE, height: CELL_SIZE, left: colIndex * CELL_SIZE, top: rowIndex * CELL_SIZE, backgroundColor: '#00FFFF' }} /> );
+        return <div key={key} className="cell wall-cell bg-blue-700"></div>;
       case DOT:
-        return ( <div key={`${rowIndex}-${colIndex}-dot`} className="absolute flex items-center justify-center" style={{ width: CELL_SIZE, height: CELL_SIZE, left: colIndex * CELL_SIZE, top: rowIndex * CELL_SIZE }} > <div className="rounded-full bg-white" style={{ width: 4, height: 4 }}></div> </div> );
+        return <div key={key} className="cell dot-cell"><div className="dot bg-white"></div></div>;
       case POWER_PELLET:
-        return ( <div key={`${rowIndex}-${colIndex}-pp`} className="absolute flex items-center justify-center" style={{ width: CELL_SIZE, height: CELL_SIZE, left: colIndex * CELL_SIZE, top: rowIndex * CELL_SIZE }} > <div className="rounded-full bg-white animate-pulse" style={{ width: 8, height: 8 }}></div> </div> );
+        return <div key={key} className="cell power-pellet-cell"><div className="power-pellet bg-gray-300 animate-pulse"></div></div>;
       case EXIT:
-        return ( <div key={`${rowIndex}-${colIndex}-exit`} className="absolute" style={{ width: CELL_SIZE, height: CELL_SIZE, left: colIndex * CELL_SIZE, top: rowIndex * CELL_SIZE, backgroundColor: 'rgba(255, 0, 255, 0.2)', boxShadow: '0 0 10px #FF00FF, 0 0 20px #FF00FF, 0 0 30px #FF00FF', animation: 'pulse-neon 2s infinite' }} /> );
-      default: // EMPTY
-        return ( <div key={`${rowIndex}-${colIndex}-empty`} className="absolute" style={{ width: CELL_SIZE, height: CELL_SIZE, left: colIndex * CELL_SIZE, top: rowIndex * CELL_SIZE}} /> );
+        // Enhanced styling for the exit cell - removed custom animation class
+        return <div key={key} className="cell exit-cell bg-purple-700 shadow-[0_0_15px_5px_rgba(192,132,252,0.8),_inset_0_0_8px_rgba(255,255,255,0.6)] flex items-center justify-center font-bold text-white text-xs">SAÍDA</div>;
+      case EMPTY:
+      default:
+        return <div key={key} className="cell empty-cell"></div>;
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full">
+    <>
+      <style>{gameSpecificStyles}</style> {/* Injete os estilos CSS específicos do jogo */}
       <div 
-        className="relative bg-black border-2 border-arcade-blue"
-        style={{ 
-          width: GRID_WIDTH * CELL_SIZE, 
-          height: GRID_HEIGHT * CELL_SIZE,
-          maxWidth: '90vw',
-          maxHeight: '70vh',
-          overflow: 'hidden' // Mantido para o container do grid
-        }}
+        ref={outerGridWrapperRef} 
+        className="pacman-grid-container relative flex flex-col items-center justify-center w-full h-full pb-16" /* Adicionado pb-16 */
       >
-        {grid.map((row, rowIndex) => ( // Renderização usa o ESTADO 'grid'
-          row.map((cell, colIndex) => renderCell(cell, rowIndex, colIndex))
-        ))}
-      </div>
-
-      {/* On-screen controls */}
-      <div className="mt-6 flex justify-center items-center w-full select-none" style={{ touchAction: 'manipulation' }}>
-        <div className="grid grid-cols-3 grid-rows-3 gap-1 w-36 h-36 md:w-48 md:h-48">
-          {/* Up Button: Row 1, Column 2 */}
-          <div className="row-start-1 col-start-2 flex items-center justify-center">
-            <button className="pixel-control-button bg-arcade-blue/30 active:bg-arcade-blue/50 hover:bg-arcade-blue/40 w-full h-full flex items-center justify-center" onClick={() => handleControlClick('ArrowUp')} aria-label="Mover para Cima" >
-              {/* Seta para Cima */}
-              <div style={{ width: 0, height: 0, borderLeft: '10px solid transparent', borderRight: '10px solid transparent', borderBottom: '15px solid white' }}></div>
-        </button>
-          </div>
-
-          {/* Left Button: Row 2, Column 1 */}
-          <div className="row-start-2 col-start-1 flex items-center justify-center">
-            <button className="pixel-control-button bg-arcade-blue/30 active:bg-arcade-blue/50 hover:bg-arcade-blue/40 w-full h-full flex items-center justify-center" onClick={() => handleControlClick('ArrowLeft')} aria-label="Mover para Esquerda" >
-              {/* Seta para Esquerda */}
-              <div style={{ width: 0, height: 0, borderTop: '10px solid transparent', borderBottom: '10px solid transparent', borderRight: '15px solid white' }}></div>
-        </button>
+        <div 
+          ref={gameGridContainerRef}
+          className="game-grid bg-black border-4 border-blue-900 shadow-2xl transition-transform duration-300 ease-out"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${GRID_WIDTH}, ${CELL_SIZE}px)`,
+            gridTemplateRows: `repeat(${GRID_HEIGHT}, ${CELL_SIZE}px)`,
+            width: GRID_WIDTH * CELL_SIZE,
+            height: GRID_HEIGHT * CELL_SIZE,
+            transform: `scale(${scale})`,
+            transformOrigin: 'center center',
+            imageRendering: 'pixelated'
+          }}
+        >
+          {grid.map((row, rowIndex) => 
+            row.map((cell, colIndex) => renderCell(cell, rowIndex, colIndex))
+          )}
+          {/* Player (Pinky) - Nova Estrutura CSS */}
+          <div 
+            className="absolute animate-float-player"
+            style={{
+              left: playerPos.x * CELL_SIZE,
+              top: playerPos.y * CELL_SIZE,
+              width: CELL_SIZE,
+              height: CELL_SIZE,
+              transition: 'left 0.1s linear, top 0.1s linear', 
+              zIndex: 10,
+              display: 'flex', 
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}
+          >
+            <div className="ghost pinky"> 
+              <div className="eyes">
+                <div className="eye leftEye">
+                  <div className="iris" style={{
+                    //@ts-ignore
+                    '--pupil-offset-x': playerDirectionRef.current === LEFT ? '-15%' : playerDirectionRef.current === RIGHT ? '15%' : '0%',
+                    //@ts-ignore
+                    '--pupil-offset-y': playerDirectionRef.current === UP ? '-15%' : playerDirectionRef.current === DOWN ? '15%' : '0%'
+                  }}></div>
+                </div>
+                <div className="eye rightEye">
+                  <div className="iris" style={{
+                    //@ts-ignore
+                    '--pupil-offset-x': playerDirectionRef.current === LEFT ? '-15%' : playerDirectionRef.current === RIGHT ? '15%' : '0%',
+                    //@ts-ignore
+                    '--pupil-offset-y': playerDirectionRef.current === UP ? '-15%' : playerDirectionRef.current === DOWN ? '15%' : '0%'
+                  }}></div>
+                </div>
+              </div>
+              <div className="ghostTail"></div>
+            </div>
           </div>
           
-          {/* Empty Center Cell: Row 2, Column 2 */}
-          <div className="row-start-2 col-start-2"></div>
-
-          {/* Right Button: Row 2, Column 3 */}
-          <div className="row-start-2 col-start-3 flex items-center justify-center">
-            <button className="pixel-control-button bg-arcade-blue/30 active:bg-arcade-blue/50 hover:bg-arcade-blue/40 w-full h-full flex items-center justify-center" onClick={() => handleControlClick('ArrowRight')} aria-label="Mover para Direita" >
-              {/* Seta para Direita */}
-              <div style={{ width: 0, height: 0, borderTop: '10px solid transparent', borderBottom: '10px solid transparent', borderLeft: '15px solid white' }}></div>
-        </button>
-          </div>
-
-          {/* Down Button: Row 3, Column 2 */}
-          <div className="row-start-3 col-start-2 flex items-center justify-center">
-            <button className="pixel-control-button bg-arcade-blue/30 active:bg-arcade-blue/50 hover:bg-arcade-blue/40 w-full h-full flex items-center justify-center" onClick={() => handleControlClick('ArrowDown')} aria-label="Mover para Baixo" >
-              {/* Seta para Baixo */}
-              <div style={{ width: 0, height: 0, borderLeft: '10px solid transparent', borderRight: '10px solid transparent', borderTop: '15px solid white' }}></div>
-        </button>
+          {/* Pacman (IA) */}
+          <div 
+            className="absolute"
+            style={{
+              left: pacmanPos.x * CELL_SIZE,
+              top: pacmanPos.y * CELL_SIZE,
+              width: CELL_SIZE,
+              height: CELL_SIZE,
+              transition: 'left 0.1s linear, top 0.1s linear',
+              zIndex: 9,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}
+          >
+            <div 
+              className="pacman"
+              style={{ 
+                transform: `rotate(${
+                  pacmanDirection === RIGHT ? '0deg' :
+                  pacmanDirection === DOWN ? '90deg' :
+                  pacmanDirection === LEFT ? '180deg' :
+                  pacmanDirection === UP ? '270deg' : '0deg'
+                })`,
+                transformOrigin: 'center center'
+              }}
+            >
+              <div className="pacman__eye"></div>
+              <div className="pacman__mouth"></div> 
+            </div>
           </div>
         </div>
+
+        {/* Game Over Message */}
+        {gameOverMessage && (
+          <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-20">
+            <p className="text-2xl font-pixel text-white mb-4">{gameOverMessage}</p>
+            {/* Não há botão de tentar novamente, o onGameOver é chamado e a cena externa decide */} 
+          </div>
+        )}
+
+        {/* D-Pad Controls */}
+        {gameOverMessage === '' && (
+            <DPad 
+                onDirectionClick={handleControlClick} 
+                className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-10 select-none"
+            />
+        )}
+
+        {showMovementTooltip && (
+          <div className="absolute bottom-[-40px] left-1/2 -translate-x-1/2 p-2 bg-gray-700 bg-opacity-90 text-gray-200 text-xs font-pixel rounded-md shadow-lg z-20 whitespace-nowrap">
+            Use as setas para mover Pinky
+          </div>
+        )}
       </div>
-      
-      {!gameActive && ( // Usa o ESTADO gameActive para mostrar overlay
-        <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center z-20">
-          <div className="text-center text-white font-pixel p-8">
-            <h2 className="text-2xl mb-4">FIM DE JOGO</h2>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 };
 

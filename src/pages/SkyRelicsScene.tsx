@@ -1,16 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import NeonButton from '../components/ui/NeonButton'; 
+import DPad from '../components/ui/DPad';
+import useAudioManager from '../hooks/useAudioManager';
 
 interface SkyRelicsSceneProps {
   onComplete: () => void;
 }
 
-const PINKY_INITIAL_X = 450;
-const PINKY_Y_POSITION = 690;
+const PINKY_INITIAL_X = 350;
 const PINKY_MOVE_SPEED = 15;
 const SCENE_WIDTH = 5073;
 const PINKY_WIDTH = 113;
+const PINKY_SPRITE_HEIGHT = 113;
 const TRANSITION_POINT_X = 1500;
+const DESIRED_PINKY_BOTTOM_MARGIN = 230;
+
+// Camera smoothing factor
+const CAMERA_SMOOTHING_FACTOR = 0.05;
+const DPAD_MOVE_INTERVAL = 30; // ms, para controle de velocidade do D-Pad (mais rápido que teclado talvez)
 
 // Sprites 16-bit
 const SPRITE_FRENTE = '/assets/images/pinky_sprite_frente_16bit.png';
@@ -30,7 +37,18 @@ const SkyRelicsScene: React.FC<SkyRelicsSceneProps> = ({ onComplete }) => {
 
   const sceneWrapperRef = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
-  const [backgroundXOffset, setBackgroundXOffset] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  
+  // Estado para a câmera suave
+  const [currentBackgroundXOffset, setCurrentBackgroundXOffset] = useState(0);
+  const targetBackgroundXOffsetRef = useRef(0); // Alvo calculado para o offset da câmera
+  const [initialOffsetApplied, setInitialOffsetApplied] = useState(false); // Novo estado
+
+  const keysPressedRef = useRef(new Set<string>());
+  const dpadActiveDirectionRef = useRef<'ArrowLeft' | 'ArrowRight' | null>(null); // Para o D-Pad
+  const animationFrameIdRef = useRef<number | null>(null);
+  const lastDpadMoveTimeRef = useRef<number>(0); // Para controlar a velocidade do D-Pad
+  const { playSound, stopSound } = useAudioManager();
 
   const dialogs = [
     "[Pinky]: Isso... isso é diferente.",
@@ -39,40 +57,52 @@ const SkyRelicsScene: React.FC<SkyRelicsSceneProps> = ({ onComplete }) => {
   ];
 
   useEffect(() => {
+    // Adicionado: Tocar música da cena do bosque
+    playSound({
+      filePath: '/assets/sounds/bosque_music.mp3',
+      loop: true,
+      fadeInDuration: 1.5,
+      volume: 0.5
+    });
+
     const updateViewport = () => {
       if (sceneWrapperRef.current) {
         setViewportWidth(sceneWrapperRef.current.offsetWidth);
+        setViewportHeight(sceneWrapperRef.current.offsetHeight);
       } else {
-        // Fallback se ref não estiver pronto, embora deva estar após a primeira renderização
         setViewportWidth(window.innerWidth);
+        setViewportHeight(window.innerHeight);
       }
     };
     updateViewport();
     window.addEventListener('resize', updateViewport);
-    return () => window.removeEventListener('resize', updateViewport);
-  }, []);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      // Adicionado: Parar música da cena do bosque
+      stopSound('/assets/sounds/bosque_music.mp3', 1.0);
+    };
+  }, [playSound, stopSound]);
 
   useEffect(() => {
+    let newTargetOffsetValue = 0;
     if (viewportWidth > 0 && SCENE_WIDTH > viewportWidth) {
-      // Onde queremos que o centro da Pinky apareça na tela (ex: meio da tela)
       const targetPinkyScreenX = viewportWidth / 2;
-      // Posição no "mundo" da imagem que deveria estar na borda esquerda da tela para centralizar Pinky
-      const desiredWorldLeftEdgeAtScreenLeft = pinkyX + PINKY_WIDTH / 2 - targetPinkyScreenX;
-      // O valor de background-position-x é o negativo disso
-      let newBackgroundXOffset = -desiredWorldLeftEdgeAtScreenLeft;
+      const pinkyCenterXInWorld = pinkyX + PINKY_WIDTH / 2;
+      const desiredWorldLeftEdgeAtScreenLeft = pinkyCenterXInWorld - targetPinkyScreenX;
+      newTargetOffsetValue = -desiredWorldLeftEdgeAtScreenLeft;
 
-      // Limites para o background-position-x
-      const minOffset = -(SCENE_WIDTH - viewportWidth); // Não mostrar além da borda direita da imagem
-      const maxOffset = 0; // Não mostrar além da borda esquerda da imagem
-
-      newBackgroundXOffset = Math.max(minOffset, Math.min(newBackgroundXOffset, maxOffset));
-      
-      setBackgroundXOffset(newBackgroundXOffset);
-    } else {
-      // Se a cena/imagem for menor que a viewport, centraliza ou alinha à esquerda
-      setBackgroundXOffset(0); // Ou (viewportWidth - SCENE_WIDTH) / 2 para centralizar
+      const minOffset = -(SCENE_WIDTH - viewportWidth);
+      const maxOffset = 0;
+      newTargetOffsetValue = Math.max(minOffset, Math.min(newTargetOffsetValue, maxOffset));
     }
-  }, [pinkyX, viewportWidth, PINKY_WIDTH]);
+    
+    targetBackgroundXOffsetRef.current = newTargetOffsetValue;
+
+    if (viewportWidth > 0 && !initialOffsetApplied) {
+      setCurrentBackgroundXOffset(newTargetOffsetValue);
+      setInitialOffsetApplied(true);
+    }
+  }, [pinkyX, viewportWidth, viewportHeight, initialOffsetApplied]);
 
   useEffect(() => {
     const dialogTimer = setTimeout(() => {
@@ -90,120 +120,146 @@ const SkyRelicsScene: React.FC<SkyRelicsSceneProps> = ({ onComplete }) => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (showDialog || currentDialog < dialogs.length || transitionTriggered || showReturnToWorldModal || showRuptureClosedModal) return;
-
-      let newPinkyX = pinkyX;
-      let newSprite = pinkySprite;
-      const rightBoundary = SCENE_WIDTH - PINKY_WIDTH;
-
-      if (event.key === 'ArrowLeft') {
-        newPinkyX = pinkyX - PINKY_MOVE_SPEED;
-        if (newPinkyX <= 0) {
-          setPinkyX(0);
-          setPinkySprite(SPRITE_FRENTE);
-          setIsMoving(false);
-          if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
-          setShowReturnToWorldModal(true);
-          return;
-        }
-        newSprite = SPRITE_ESQUERDA;
-        setIsMoving(true);
-      } else if (event.key === 'ArrowRight') {
-        const potentialNextX = pinkyX + PINKY_MOVE_SPEED;
-        
-        if (!transitionTriggered && potentialNextX >= TRANSITION_POINT_X) {
-          setPinkyX(Math.min(potentialNextX, rightBoundary));
-          setPinkySprite(SPRITE_DIREITA);
-          setIsMoving(false); 
-          if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
-          console.log("[SkyRelicsScene] ATINGIU PONTO DE TRANSIÇÃO (" + TRANSITION_POINT_X + "px) (KeyDown), chamando onComplete.");
-          setTransitionTriggered(true);
-          onComplete();
-          return; 
-        }
-        newPinkyX = Math.min(potentialNextX, rightBoundary);
-        newSprite = SPRITE_DIREITA;
-        setIsMoving(true);
-      }
-
-      setPinkyX(newPinkyX);
-      setPinkySprite(newSprite);
-
-      if (isMoving) {
-        if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
-        moveTimeoutRef.current = setTimeout(() => {
-          setIsMoving(false);
-          setPinkySprite(SPRITE_FRENTE);
-        }, 200);
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        keysPressedRef.current.add(event.key);
       }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-        if (showDialog || currentDialog < dialogs.length) return;
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-            if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
-            moveTimeoutRef.current = setTimeout(() => {
-                 setIsMoving(false);
-                 setPinkySprite(SPRITE_FRENTE);
-            }, 100); 
-        }
+      if (showDialog || currentDialog < dialogs.length || transitionTriggered || showReturnToWorldModal || showRuptureClosedModal) return;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        keysPressedRef.current.delete(event.key);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+
+    // Loop de Animação para Movimento Contínuo
+    const gameLoop = () => {
+      if (transitionTriggered || showReturnToWorldModal || showRuptureClosedModal || showDialog || currentDialog < dialogs.length) {
+        // Se qualquer modal ou diálogo estiver ativo, ou transição iniciada, para o movimento
+        if (isMoving) {
+          setIsMoving(false);
+          setPinkySprite(SPRITE_FRENTE);
+        }
+        keysPressedRef.current.clear();
+        dpadActiveDirectionRef.current = null;
+        animationFrameIdRef.current = requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      let pressedDirKey: string | null = null; // Teclado
+      if (keysPressedRef.current.has('ArrowLeft')) {
+        pressedDirKey = 'ArrowLeft';
+      } else if (keysPressedRef.current.has('ArrowRight')) {
+        pressedDirKey = 'ArrowRight';
+      }
+
+      // Prioriza D-Pad se estiver ativo
+      let activeMoveDirection = dpadActiveDirectionRef.current || pressedDirKey;
+
+      let newPinkyX = pinkyX;
+      let newSprite = pinkySprite;
+      let movementOccurred = false;
+      const rightBoundary = SCENE_WIDTH - PINKY_WIDTH;
+
+      if (activeMoveDirection) {
+        if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
+        setIsMoving(true);
+
+        let moveSpeed = PINKY_MOVE_SPEED;
+        // Controlar a velocidade para o D-Pad aqui, se estiver usando dpadActiveDirectionRef
+        if (dpadActiveDirectionRef.current && performance.now() - lastDpadMoveTimeRef.current < DPAD_MOVE_INTERVAL) {
+          // Se o D-Pad está ativo mas o intervalo não passou, não move e agenda próximo frame
+          animationFrameIdRef.current = requestAnimationFrame(gameLoop);
+          return;
+        }
+
+        if (activeMoveDirection === 'ArrowLeft') {
+          newPinkyX = pinkyX - moveSpeed;
+          if (newPinkyX <= 0) {
+            newPinkyX = 0; // Para na borda
+            // Lógica do modal da borda esquerda
+            if (!showReturnToWorldModal && !showRuptureClosedModal) {
+              setShowReturnToWorldModal(true);
+              keysPressedRef.current.clear(); // Impede movimento ao abrir modal
+              dpadActiveDirectionRef.current = null;
+              activeMoveDirection = null; // Interrompe movimento neste frame
+            }
+          }
+          newSprite = SPRITE_ESQUERDA;
+          movementOccurred = true;
+        } else if (activeMoveDirection === 'ArrowRight') {
+          const potentialNextX = pinkyX + moveSpeed;
+          if (!transitionTriggered && potentialNextX >= TRANSITION_POINT_X) {
+            newPinkyX = Math.min(potentialNextX, rightBoundary);
+            newSprite = SPRITE_DIREITA;
+            setIsMoving(false);
+            setTransitionTriggered(true);
+            onComplete();
+            animationFrameIdRef.current = requestAnimationFrame(gameLoop);
+            return; // Importante sair do loop aqui após disparar onComplete
+          }
+          newPinkyX = Math.min(potentialNextX, rightBoundary);
+          newSprite = SPRITE_DIREITA;
+          movementOccurred = true;
+        }
+
+        if (movementOccurred) {
+            setPinkyX(newPinkyX);
+            setPinkySprite(newSprite);
+            if (dpadActiveDirectionRef.current) { // Atualiza o tempo do último movimento do D-Pad
+                lastDpadMoveTimeRef.current = performance.now();
+            }
+        }
+
+      } else if (isMoving) {
+        // Nenhuma tecla/dpad pressionada, mas estava se movendo -> agendar parada
+        if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
+        moveTimeoutRef.current = setTimeout(() => {
+          setIsMoving(false);
+          setPinkySprite(SPRITE_FRENTE);
+        }, 100); // Delay para parar
+      }
+
+      // Atualização Suave da Câmera
+      if (initialOffsetApplied) { // Só suaviza se o offset inicial já foi aplicado
+        if (Math.abs(currentBackgroundXOffset - targetBackgroundXOffsetRef.current) > 0.5) { // 0.5 para evitar micro-movimentos
+          setCurrentBackgroundXOffset(prevOffset => 
+            prevOffset + (targetBackgroundXOffsetRef.current - prevOffset) * CAMERA_SMOOTHING_FACTOR
+          );
+        } else if (currentBackgroundXOffset !== targetBackgroundXOffsetRef.current) {
+          // Snap para o valor final se estiver perto o suficiente
+          setCurrentBackgroundXOffset(targetBackgroundXOffsetRef.current);
+        }
+      }
+
+      animationFrameIdRef.current = requestAnimationFrame(gameLoop);
+    };
+
+    animationFrameIdRef.current = requestAnimationFrame(gameLoop);
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
+      if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
     };
-  }, [pinkyX, pinkySprite, onComplete, currentDialog, dialogs.length, showDialog, isMoving, transitionTriggered, showReturnToWorldModal, showRuptureClosedModal]);
+  }, [pinkyX, pinkySprite, onComplete, currentDialog, dialogs.length, showDialog, isMoving, transitionTriggered, showReturnToWorldModal, showRuptureClosedModal, viewportWidth, viewportHeight, currentBackgroundXOffset, initialOffsetApplied]);
 
-  const handleDPadClick = (direction: 'left' | 'right') => {
+  const handleDPadPointerDown = (direction: 'ArrowLeft' | 'ArrowRight') => {
     if (showDialog || currentDialog < dialogs.length || transitionTriggered || showReturnToWorldModal || showRuptureClosedModal) return;
-    
-    let newPinkyX = pinkyX;
-    let newSprite = pinkySprite;
-    const rightBoundary = SCENE_WIDTH - PINKY_WIDTH;
+    dpadActiveDirectionRef.current = direction;
+    lastDpadMoveTimeRef.current = performance.now() - DPAD_MOVE_INTERVAL; // Permite movimento imediato no primeiro toque
+    if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
+    setIsMoving(true); // Define isMoving imediatamente para resposta visual
+  };
 
-    if (direction === 'left') {
-      newPinkyX = pinkyX - PINKY_MOVE_SPEED;
-      if (newPinkyX <= 0) {
-        setPinkyX(0);
-        setPinkySprite(SPRITE_FRENTE);
-        setIsMoving(false);
-        if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
-        setShowReturnToWorldModal(true);
-        return;
-      }
-      newSprite = SPRITE_ESQUERDA;
-      setIsMoving(true);
-    } else if (direction === 'right') {
-      const potentialNextX = pinkyX + PINKY_MOVE_SPEED;
-
-      if (!transitionTriggered && potentialNextX >= TRANSITION_POINT_X) {
-        setPinkyX(Math.min(potentialNextX, rightBoundary));
-        setPinkySprite(SPRITE_DIREITA);
-        setIsMoving(false); 
-        if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
-        console.log("[SkyRelicsScene] ATINGIU PONTO DE TRANSIÇÃO (" + TRANSITION_POINT_X + "px) (DPad), chamando onComplete.");
-        setTransitionTriggered(true);
-        onComplete();
-        return;
-      }
-      newPinkyX = Math.min(potentialNextX, rightBoundary);
-      newSprite = SPRITE_DIREITA;
-      setIsMoving(true);
-    }
-
-    setPinkyX(newPinkyX);
-    setPinkySprite(newSprite);
-
-    if (isMoving) {
-        if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
-        moveTimeoutRef.current = setTimeout(() => {
-            setIsMoving(false);
-            setPinkySprite(SPRITE_FRENTE);
-        }, 300);
-    }
+  const handleDPadPointerUp = () => { // A direção específica não é crucial aqui, apenas que foi solto
+    dpadActiveDirectionRef.current = null;
+    // A lógica de parar (sprite e isMoving) será tratada pelo loop de animação (gameLoop)
+    // quando nenhuma tecla/dpad estiver pressionada.
   };
 
   const ModalReturnToWorld = () => (
@@ -258,10 +314,10 @@ const SkyRelicsScene: React.FC<SkyRelicsSceneProps> = ({ onComplete }) => {
       style={{
         backgroundImage: "url('/assets/images/cena_bosque.png')",
         backgroundSize: 'cover',
-        backgroundPositionX: `${backgroundXOffset}px`,
+        backgroundPositionX: `${currentBackgroundXOffset}px`,
         backgroundPositionY: 'center',
         backgroundRepeat: 'no-repeat',
-        transition: 'background-position-x 0.05s linear',
+        paddingBottom: '100px',
       }}
     >
       {/* Pinky */}
@@ -271,9 +327,9 @@ const SkyRelicsScene: React.FC<SkyRelicsSceneProps> = ({ onComplete }) => {
         className="absolute select-none"
         style={{
           left: `${pinkyX}px`,
-          top: `${PINKY_Y_POSITION}px`,
+          top: `${viewportHeight - PINKY_SPRITE_HEIGHT - DESIRED_PINKY_BOTTOM_MARGIN}px`,
           width: `${PINKY_WIDTH}px`, 
-          height: 'auto',
+          height: `${PINKY_SPRITE_HEIGHT}px`,
           imageRendering: 'pixelated'
         }}
       />
@@ -281,33 +337,31 @@ const SkyRelicsScene: React.FC<SkyRelicsSceneProps> = ({ onComplete }) => {
       {/* Caixa de Diálogo */}
       {showDialog && currentDialog < dialogs.length && (
         <div 
-          className="fixed bottom-28 left-1/2 transform -translate-x-1/2 w-full max-w-2xl p-4 bg-slate-800 bg-opacity-90 border-2 border-arcade-cyan rounded-lg shadow-lg z-10" 
+          className="fixed bottom-16 md:bottom-20 left-1/2 transform -translate-x-1/2 w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl p-3 sm:p-4 bg-slate-800 bg-opacity-90 border-2 border-arcade-cyan rounded-lg shadow-lg z-10"
           style={{ boxShadow: '0 0 10px rgba(0, 200, 255, 0.6)' }}
         >
-          <p className="text-xl font-pixel whitespace-pre-line text-center">
+          <p className="text-base sm:text-lg md:text-xl font-pixel whitespace-pre-line text-center">
             {dialogs[currentDialog < dialogs.length ? currentDialog : dialogs.length -1]}
           </p>
         </div>
       )}
       
-      {/* D-Pads */}
+      {/* D-Pads E TEXTO INSTRUTIVO */}
       {!showDialog && currentDialog >= dialogs.length && !(showReturnToWorldModal || showRuptureClosedModal) && (
-         <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 flex space-x-4 z-20">
-          <button 
-            onClick={() => handleDPadClick('left')}
-            className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 px-6 rounded-l-lg border-2 border-arcade-cyan shadow-md hover:shadow-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-arcade-pink focus:ring-opacity-50"
-            style={{ boxShadow: '0 0 5px #0ff, 0 0 10px #0ff' }}
+         <div 
+            className="fixed bottom-6 left-1/2 transform -translate-x-1/2 flex flex-col items-center space-y-2 z-20 select-none"
+            style={{ touchAction: 'manipulation' }}
           >
-            &#x2190; 
-          </button>
-          <button 
-            onClick={() => handleDPadClick('right')}
-            className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 px-6 rounded-r-lg border-2 border-arcade-cyan shadow-md hover:shadow-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-arcade-pink focus:ring-opacity-50"
-            style={{ boxShadow: '0 0 5px #0ff, 0 0 10px #0ff' }}
-          >
-            &#x2192; 
-          </button>
-      </div>
+            <DPad 
+                onDirectionPointerDown={handleDPadPointerDown} 
+                onDirectionPointerUp={handleDPadPointerUp}
+                className="select-none"
+                visibleButtons={{ left: true, right: true, up: false, down: false }}
+            />
+            <p className="text-xs font-pixel text-center text-gray-300 bg-black bg-opacity-50 px-2 py-1 rounded">
+              Use as setas do teclado ou os botões para mover Pinky
+            </p>
+          </div>
       )}
 
       {showReturnToWorldModal && <ModalReturnToWorld />}
